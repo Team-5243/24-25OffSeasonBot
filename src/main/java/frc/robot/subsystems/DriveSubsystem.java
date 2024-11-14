@@ -10,10 +10,15 @@ import com.kauailabs.navx.frc.AHRS;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 
 import edu.wpi.first.math.controller.RamseteController;
+import edu.wpi.first.units.Units;
+import edu.wpi.first.units.Voltage;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.Constants;
+import frc.robot.Utilities;
 
 public class DriveSubsystem extends SubsystemBase {
     /** Creates a new ExampleSubsystem. */
@@ -24,6 +29,8 @@ public class DriveSubsystem extends SubsystemBase {
     public RelativeEncoder flEncoder;
     public RelativeEncoder frEncoder;
     public DifferentialDrive diffDrive;
+    public Voltage volts;
+    public SysIdRoutine sysid;
     public RamseteController rController;
     public AHRS gyro;
 
@@ -36,11 +43,37 @@ public class DriveSubsystem extends SubsystemBase {
 
         blMotor.follow(flMotor);
         brMotor.follow(frMotor);
-
         frEncoder = frMotor.getEncoder();
         flEncoder = flMotor.getEncoder();
 
+        
+
         diffDrive = new DifferentialDrive(flMotor, frMotor);
+
+        sysid = new SysIdRoutine(new SysIdRoutine.Config(), new SysIdRoutine.Mechanism(
+            voltage -> {
+                flMotor.setVoltage(voltage.magnitude());
+                frMotor.setVoltage(voltage.magnitude());
+            },
+            log -> {
+                // Record a frame for the left motors.  Since these share an encoder, we consider
+                // the entire group to be one motor.
+                log.motor("drive-left")
+                    .voltage(
+                        Units.Volts.of(
+                            flMotor.get() * RobotController.getBatteryVoltage()))
+                    .linearPosition(Units.Meters.of(Utilities.rotationsToInches(flEncoder.getPosition())))
+                    .linearVelocity(
+                        Units.MetersPerSecond.of(flEncoder.getVelocity()));
+                // Record a frame for the right motors.  Since these share an encoder, we consider
+                // the entire group to be one motor.
+                log.motor("drive-right")
+                    .voltage(
+                        Units.Volts.of(frMotor.get() * RobotController.getBatteryVoltage()))
+                    .linearPosition(Units.Meters.of(Utilities.rotationsToInches(frEncoder.getPosition())))
+                    .linearVelocity(
+                        Units.MetersPerSecond.of(frEncoder.getVelocity()));
+              }, this));
 
         rController = new RamseteController();
 
